@@ -23,8 +23,8 @@ venv/
 *.csv
 *.parquet
 
-# Model artifacts
-models/
+# Model artifacts (saved weights only — not src/models/ source code)
+/models/
 *.pkl
 *.pickle
 *.joblib
