@@ -1,0 +1,72 @@
+# Configuration file for Cinema Audience Forecasting
+
+paths:
+  data_dir: "."
+  output_dir: "output"
+  model_dir: "models"
+
+data:
+  train_start: "2023-01-01"
+  train_end: "2024-02-28"
+  val_start: "2024-01-01"
+  val_end: "2024-02-28"
+  test_start: "2024-03-01"
+  test_end: "2024-04-22"
+
+models:
+  lightgbm:
+    n_estimators: 2000
+    max_depth: 12
+    learning_rate: 0.02
+    num_leaves: 127
+    min_data_in_leaf: 20
+    feature_fraction: 0.8
+    bagging_fraction: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 0.1
+    random_state: 42
+    
+  xgboost:
+    n_estimators: 2000
+    max_depth: 8
+    learning_rate: 0.01
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    random_state: 42
+    
+  catboost:
+    iterations: 2000
+    learning_rate: 0.01
+    depth: 8
+    l2_leaf_reg: 3
+    random_state: 42
+    
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_leaf: 10
+    random_state: 42
+
+ensemble:
+  method: "stacking"  # "weighted" or "stacking"
+  optimize_weights: true
+
+validation:
+  n_splits: 5
+  time_series_split: true
+
+feature_engineering:
+  lag_days: [1, 2, 3, 7, 14, 21, 28, 30, 60, 90]
+  rolling_windows: [7, 14, 30, 60, 90]
+  use_target_encoding: true
+  use_holidays: true
+  use_interactions: true
+
+post_processing:
+  floor_at_zero: true
+  cap_at_max: true
+  apply_smoothing: true
+  smoothing_window: 3
+
