@@ -1,4 +1,4 @@
-# Python
+# ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -9,43 +9,57 @@ dist/
 build/
 .eggs/
 
-# Virtual environments
+# ── Virtual Environments ─────────────────────────────────────────────────────
 .env
 .venv
 env/
 venv/
+ENV/
 
-# Jupyter
+# ── Jupyter ──────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
 
-# Data files (large CSVs / parquet)
+# ── Data Files ───────────────────────────────────────────────────────────────
+# Raw and processed CSVs / Parquet (too large for version control)
 *.csv
 *.parquet
+*.tsv
 
-# Model artifacts (saved weights only — not src/models/ source code)
+# ── Model Artifacts ──────────────────────────────────────────────────────────
+# Trained model weights — use DVC or cloud storage instead
 /models/
 *.pkl
 *.pickle
 *.joblib
-*.model
-*.txt.lgbm
+*.cbm
 model_lgb.txt
 model_xgb.json
+*.model
 
-# Submissions / outputs
+# ── Submissions & Outputs ────────────────────────────────────────────────────
 submission*.csv
+outputs/
 
-# IDE
+# ── Logs & Run Artifacts ─────────────────────────────────────────────────────
+*.log
+run_log.txt
+logs/
+
+# ── IDE & Editor ─────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *~
+*.code-workspace
 
-# OS
+# ── OS ───────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Logs
-*.log
-run_log.txt
+# ── Miscellaneous ────────────────────────────────────────────────────────────
+.cache/
+tmp/
+temp/
+scratch/
