@@ -1,0 +1,1843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cinema Audience Forecasting · Vishal Bhandari</title>
+  <meta name="description" content="A production-grade ML forecasting system predicting daily cinema attendance across 337 Indian theaters using gradient boosting ensembles, advance booking signals, and holiday-aware feature engineering." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── DESIGN TOKENS ── */
+    :root {
+      --bg-base:       #060810;
+      --bg-card:       #0D1117;
+      --bg-card-hover: #111827;
+      --border:        rgba(255,255,255,0.07);
+      --blue:          #3B82F6;
+      --blue-dim:      rgba(59,130,246,0.15);
+      --orange:        #F97316;
+      --orange-dim:    rgba(249,115,22,0.12);
+      --green:         #22D3EE;
+      --text:          #E2E8F0;
+      --text-muted:    #64748B;
+      --text-dim:      #94A3B8;
+      --font-head:     'Space Grotesk', sans-serif;
+      --font-body:     'Inter', sans-serif;
+      --font-mono:     'JetBrains Mono', monospace;
+      --glow-blue:     0 0 60px rgba(59,130,246,0.18);
+      --glow-orange:   0 0 60px rgba(249,115,22,0.12);
+    }
+
+    /* ── RESET ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg-base);
+      color: var(--text);
+      font-family: var(--font-body);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── FILM GRAIN OVERLAY ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.4;
+    }
+
+    /* ── TYPOGRAPHY ── */
+    h1, h2, h3, h4, h5 { font-family: var(--font-head); font-weight: 700; letter-spacing: -0.02em; }
+    code, .mono { font-family: var(--font-mono); font-size: 0.85em; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 0 2rem;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(6,8,16,0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 1rem;
+      background: linear-gradient(90deg, var(--blue), var(--orange));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .nav-links { display: flex; gap: 2rem; list-style: none; }
+    .nav-links a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      padding: 0.5rem 1.25rem;
+      background: var(--blue-dim);
+      color: var(--blue);
+      border: 1px solid rgba(59,130,246,0.3);
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .nav-cta:hover { background: rgba(59,130,246,0.25); }
+
+    /* ── LAYOUT ── */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
+    section { padding: 6rem 0; }
+
+    /* ── HERO ── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      padding-top: 64px;
+    }
+    .hero-glow {
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 900px;
+      height: 500px;
+      background: radial-gradient(ellipse at center, rgba(59,130,246,0.08) 0%, rgba(249,115,22,0.04) 40%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-filmstrip {
+      position: absolute;
+      top: 0; right: -80px;
+      width: 120px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      opacity: 0.06;
+      pointer-events: none;
+    }
+    .hero-filmstrip-hole {
+      width: 100%;
+      height: 24px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 4px;
+    }
+    .hero-content { position: relative; z-index: 1; }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1rem;
+      background: var(--orange-dim);
+      border: 1px solid rgba(249,115,22,0.25);
+      border-radius: 100px;
+      color: var(--orange);
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      opacity: 0;
+      animation: fadeUp 0.6s 0.1s forwards;
+    }
+    .hero-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); }
+    h1.hero-title {
+      font-size: clamp(2.2rem, 5vw, 4.2rem);
+      line-height: 1.12;
+      margin-bottom: 1.5rem;
+      opacity: 0;
+      animation: fadeUp 0.6s 0.25s forwards;
+    }
+    .hero-title .line-2 {
+      background: linear-gradient(90deg, var(--blue) 0%, #60A5FA 50%, var(--orange) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: block;
+    }
+    .hero-desc {
+      font-size: 1.1rem;
+      color: var(--text-dim);
+      max-width: 600px;
+      margin-bottom: 2.5rem;
+      opacity: 0;
+      animation: fadeUp 0.6s 0.4s forwards;
+    }
+    .hero-metrics {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      margin-bottom: 3rem;
+      opacity: 0;
+      animation: fadeUp 0.6s 0.55s forwards;
+    }
+    .hero-metric {
+      display: flex;
+      flex-direction: column;
+    }
+    .hero-metric-value {
+      font-family: var(--font-head);
+      font-size: 2.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--blue), var(--orange));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+    }
+    .hero-metric-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .hero-metric-divider {
+      width: 1px;
+      height: 3rem;
+      background: var(--border);
+      align-self: center;
+    }
+    .hero-ctas {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: fadeUp 0.6s 0.7s forwards;
+    }
+    .btn-primary {
+      padding: 0.8rem 2rem;
+      background: linear-gradient(135deg, var(--blue), #2563EB);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-family: var(--font-head);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 24px rgba(59,130,246,0.25);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(59,130,246,0.35); }
+    .btn-secondary {
+      padding: 0.8rem 2rem;
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-family: var(--font-head);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover { border-color: rgba(255,255,255,0.2); color: var(--text); background: var(--bg-card); }
+    .hero-tech-stack {
+      position: absolute;
+      bottom: 3rem;
+      right: 0;
+      display: flex;
+      gap: 0.75rem;
+      flex-direction: column;
+      align-items: flex-end;
+      opacity: 0;
+      animation: fadeUp 0.6s 1s forwards;
+    }
+    .tech-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .tech-pills { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+    .tech-pill {
+      padding: 0.25rem 0.75rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+
+    /* ── SECTION HEADERS ── */
+    .section-tag {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--blue);
+      margin-bottom: 0.75rem;
+    }
+    .section-title {
+      font-size: clamp(1.6rem, 3vw, 2.5rem);
+      margin-bottom: 0.75rem;
+    }
+    .section-desc {
+      color: var(--text-dim);
+      font-size: 1rem;
+      max-width: 600px;
+    }
+    .section-header { margin-bottom: 3.5rem; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .card:hover { border-color: rgba(255,255,255,0.12); background: var(--bg-card-hover); }
+
+    /* ── PROBLEM SECTION ── */
+    #problem { background: linear-gradient(180deg, var(--bg-base) 0%, rgba(59,130,246,0.02) 100%); }
+    .problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .problem-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .problem-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--blue), transparent);
+    }
+    .problem-card.accent::before { background: linear-gradient(90deg, var(--orange), transparent); }
+    .problem-number {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+    .problem-card h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    .problem-card p { color: var(--text-dim); font-size: 0.9rem; line-height: 1.7; }
+    .problem-main {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, rgba(59,130,246,0.06), rgba(249,115,22,0.04));
+      border: 1px solid rgba(59,130,246,0.2);
+      border-radius: 20px;
+      padding: 2.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2.5rem;
+      align-items: center;
+    }
+    .problem-stat-row { display: flex; flex-direction: column; gap: 1rem; }
+    .problem-stat {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .problem-stat-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+    .problem-stat-icon.blue { background: var(--blue-dim); }
+    .problem-stat-icon.orange { background: var(--orange-dim); }
+    .problem-stat-val { font-family: var(--font-head); font-weight: 700; font-size: 1.15rem; }
+    .problem-stat-desc { color: var(--text-muted); font-size: 0.8rem; }
+
+    /* ── DATA SECTION ── */
+    #data { background: var(--bg-base); }
+    .data-schema-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2.5rem; }
+    .schema-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      transition: all 0.2s;
+    }
+    .schema-card:hover { border-color: rgba(59,130,246,0.3); transform: translateY(-2px); }
+    .schema-card-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .schema-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .schema-icon.blue { background: var(--blue-dim); }
+    .schema-icon.orange { background: var(--orange-dim); }
+    .schema-icon.green { background: rgba(34,211,238,0.1); }
+    .schema-icon.purple { background: rgba(167,139,250,0.1); }
+    .schema-card h4 { font-size: 0.85rem; font-family: var(--font-mono); color: var(--text); }
+    .schema-card p { font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; }
+    .schema-card .schema-rows { font-size: 0.72rem; color: var(--blue); margin-top: 0.5rem; font-family: var(--font-mono); }
+    .data-flow {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2.5rem;
+    }
+    .data-flow h3 { font-size: 1rem; color: var(--text-dim); margin-bottom: 2rem; }
+    .flow-steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow-x: auto;
+      padding-bottom: 1rem;
+    }
+    .flow-step {
+      flex-shrink: 0;
+      text-align: center;
+      min-width: 130px;
+    }
+    .flow-step-box {
+      width: 100px;
+      height: 64px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      margin: 0 auto;
+      font-size: 0.7rem;
+      font-weight: 600;
+      transition: all 0.2s;
+      cursor: default;
+    }
+    .flow-step-box:hover { transform: translateY(-2px); border-color: var(--blue); }
+    .flow-step-icon { font-size: 1.2rem; }
+    .flow-arrow {
+      flex-shrink: 0;
+      color: var(--text-muted);
+      font-size: 1.2rem;
+      padding: 0 0.25rem;
+    }
+    .flow-step-label { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem; }
+
+    /* ── FEATURES SECTION ── */
+    #features { background: linear-gradient(180deg, var(--bg-base) 0%, rgba(249,115,22,0.02) 100%); }
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem;
+    }
+    .feature-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .feature-card h3 { font-size: 1rem; }
+    .feature-impact {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.25rem 0.65rem;
+      border-radius: 100px;
+    }
+    .feature-impact.high { background: rgba(34,197,94,0.1); color: #4ADE80; border: 1px solid rgba(34,197,94,0.2); }
+    .feature-impact.medium { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(59,130,246,0.2); }
+    .feature-impact.low { background: var(--orange-dim); color: var(--orange); border: 1px solid rgba(249,115,22,0.2); }
+    .feature-examples { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .feature-tag {
+      font-size: 0.72rem;
+      padding: 0.2rem 0.65rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+    .feature-bar-row { display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; }
+    .feature-bar-bg {
+      flex: 1;
+      height: 6px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+    .feature-bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      transition: width 1.2s cubic-bezier(0.4,0,0.2,1);
+      width: 0;
+    }
+    .feature-bar-fill.blue { background: linear-gradient(90deg, var(--blue), #60A5FA); }
+    .feature-bar-fill.orange { background: linear-gradient(90deg, var(--orange), #FB923C); }
+    .feature-bar-fill.green { background: linear-gradient(90deg, #22D3EE, #34D399); }
+    .feature-bar-fill.purple { background: linear-gradient(90deg, #A78BFA, #818CF8); }
+    .feature-bar-label { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); min-width: 36px; text-align: right; }
+
+    /* ── MODELS SECTION ── */
+    #models { background: var(--bg-base); }
+    .model-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-bottom: 2.5rem; }
+    .model-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      transition: all 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+    .model-card.featured {
+      border-color: rgba(59,130,246,0.3);
+      background: linear-gradient(135deg, rgba(59,130,246,0.06), var(--bg-card));
+    }
+    .model-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--blue), transparent);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .model-card:hover::after { opacity: 1; }
+    .model-badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+    }
+    .model-badge.lgb { background: rgba(34,211,238,0.1); color: #22D3EE; }
+    .model-badge.xgb { background: rgba(249,115,22,0.1); color: var(--orange); }
+    .model-badge.cat { background: var(--blue-dim); color: var(--blue); }
+    .model-badge.rf  { background: rgba(167,139,250,0.1); color: #A78BFA; }
+    .model-badge.proph { background: rgba(34,197,94,0.1); color: #4ADE80; }
+    .model-badge.ens { background: linear-gradient(90deg, var(--blue-dim), var(--orange-dim)); color: var(--text); }
+    .model-card h3 { font-size: 1.05rem; margin-bottom: 0.35rem; }
+    .model-card p { font-size: 0.82rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 1rem; }
+    .model-score {
+      display: flex;
+      align-items: baseline;
+      gap: 0.35rem;
+    }
+    .score-value {
+      font-family: var(--font-head);
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .score-label { font-size: 0.75rem; color: var(--text-muted); }
+    .ensemble-card {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(249,115,22,0.05));
+      border: 1px solid rgba(59,130,246,0.25);
+    }
+    .ensemble-inner { display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
+    .ensemble-models { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .ensemble-model-pill {
+      padding: 0.4rem 1rem;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .ensemble-model-pill .weight {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--blue);
+    }
+    .ensemble-score-box {
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .ensemble-score-val {
+      font-family: var(--font-head);
+      font-size: 3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--blue), var(--orange));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+    }
+    .ensemble-score-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+    /* ── CHARTS ── */
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem;
+    }
+    .chart-card h3 { font-size: 0.95rem; margin-bottom: 1.25rem; color: var(--text-dim); }
+    .chart-container { position: relative; height: 230px; }
+
+    /* ── FEATURE IMPORTANCE BAR ── */
+    .fi-list { display: flex; flex-direction: column; gap: 0.65rem; }
+    .fi-row { display: flex; align-items: center; gap: 0.75rem; }
+    .fi-name {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      min-width: 160px;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .fi-bar-bg {
+      flex: 1;
+      height: 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+    .fi-bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      background: linear-gradient(90deg, var(--blue), #60A5FA);
+      transition: width 1.4s cubic-bezier(0.4,0,0.2,1);
+      width: 0;
+    }
+    .fi-val {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      min-width: 32px;
+      text-align: right;
+    }
+
+    /* ── PERFORMANCE SECTION ── */
+    #performance { background: linear-gradient(180deg, var(--bg-base) 0%, rgba(59,130,246,0.02) 50%, var(--bg-base) 100%); }
+    .perf-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    .perf-row {
+      display: grid;
+      grid-template-columns: 180px 1fr 80px;
+      align-items: center;
+      gap: 1.5rem;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    .perf-row:last-child { border-bottom: none; }
+    .perf-version { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-dim); }
+    .perf-bar-wrap { position: relative; }
+    .perf-bar-bg { height: 12px; background: rgba(255,255,255,0.05); border-radius: 100px; overflow: hidden; }
+    .perf-bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      transition: width 1.6s cubic-bezier(0.4,0,0.2,1);
+      width: 0;
+    }
+    .perf-bar-fill.v1 { background: rgba(100,116,139,0.6); }
+    .perf-bar-fill.v2 { background: rgba(59,130,246,0.6); }
+    .perf-bar-fill.v3 { background: linear-gradient(90deg, #3B82F6, #60A5FA); }
+    .perf-bar-fill.v4 { background: linear-gradient(90deg, #3B82F6, #F97316); }
+    .perf-bar-fill.v5 { background: linear-gradient(90deg, var(--blue), var(--orange)); box-shadow: 0 0 16px rgba(59,130,246,0.3); }
+    .perf-score { font-family: var(--font-head); font-weight: 700; font-size: 1.1rem; text-align: right; }
+    .perf-gain {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #4ADE80;
+      margin-left: 0.5rem;
+      font-family: var(--font-mono);
+    }
+
+    /* ── INSIGHTS SECTION ── */
+    #insights { background: var(--bg-base); }
+    .insight-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+    .insight-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      position: relative;
+    }
+    .insight-number {
+      font-family: var(--font-head);
+      font-size: 3.5rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+    .insight-number.blue { color: var(--blue); }
+    .insight-number.orange { color: var(--orange); }
+    .insight-number.green { color: #22D3EE; }
+    .insight-card h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .insight-card p { font-size: 0.85rem; color: var(--text-dim); line-height: 1.7; }
+    .insight-quote {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, rgba(59,130,246,0.06), rgba(249,115,22,0.04));
+      border: 1px solid rgba(59,130,246,0.2);
+      border-radius: 16px;
+      padding: 2rem 2.5rem;
+      text-align: center;
+    }
+    .insight-quote blockquote {
+      font-size: 1.15rem;
+      font-style: italic;
+      color: var(--text);
+      line-height: 1.7;
+      margin-bottom: 1rem;
+    }
+    .insight-quote cite { font-size: 0.82rem; color: var(--text-muted); }
+
+    /* ── ARCHITECTURE SECTION ── */
+    #architecture { background: linear-gradient(180deg, var(--bg-base) 0%, rgba(249,115,22,0.02) 100%); }
+    .arch-pipeline {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .arch-step {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 1.5rem;
+      position: relative;
+    }
+    .arch-step:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 24px;
+      top: 48px;
+      bottom: -2rem;
+      width: 1px;
+      background: linear-gradient(180deg, var(--border), transparent);
+    }
+    .arch-step { padding: 0 0 2rem; }
+    .arch-step:last-child { padding-bottom: 0; }
+    .arch-icon-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .arch-icon-box {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+    }
+    .arch-icon-box.blue { background: var(--blue-dim); border: 1px solid rgba(59,130,246,0.2); }
+    .arch-icon-box.orange { background: var(--orange-dim); border: 1px solid rgba(249,115,22,0.2); }
+    .arch-icon-box.green { background: rgba(34,211,238,0.1); border: 1px solid rgba(34,211,238,0.15); }
+    .arch-icon-box.purple { background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.15); }
+    .arch-content h3 { font-size: 1rem; margin-bottom: 0.35rem; }
+    .arch-content p { font-size: 0.85rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 0.75rem; }
+    .arch-tech-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .arch-tech {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      padding: 0.2rem 0.6rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+    }
+
+    /* ── STACK SECTION ── */
+    #stack { background: var(--bg-base); }
+    .stack-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; }
+    .stack-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1rem;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .stack-card:hover { border-color: rgba(59,130,246,0.3); transform: translateY(-3px); }
+    .stack-icon { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    .stack-name { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+    .stack-role { font-size: 0.68rem; color: var(--text-muted); margin-top: 0.15rem; }
+
+    /* ── GITHUB CTA SECTION ── */
+    #github {
+      background: linear-gradient(180deg, var(--bg-base) 0%, rgba(59,130,246,0.04) 50%, var(--bg-base) 100%);
+      text-align: center;
+    }
+    .github-box {
+      background: var(--bg-card);
+      border: 1px solid rgba(59,130,246,0.2);
+      border-radius: 24px;
+      padding: 4rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .github-box::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px; height: 300px;
+      background: radial-gradient(ellipse at center, rgba(59,130,246,0.1) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .github-box h2 {
+      font-size: 2.2rem;
+      margin-bottom: 1rem;
+      position: relative;
+    }
+    .github-box p {
+      color: var(--text-dim);
+      font-size: 1rem;
+      max-width: 500px;
+      margin: 0 auto 2.5rem;
+      position: relative;
+    }
+    .github-ctas {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      position: relative;
+    }
+    .btn-github {
+      padding: 0.9rem 2rem;
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-family: var(--font-head);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      transition: all 0.2s;
+    }
+    .btn-github:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+    .structure-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 3rem; text-align: left; }
+    .structure-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+    }
+    .structure-card h4 { font-size: 0.9rem; margin-bottom: 1rem; color: var(--text-dim); }
+    .dir-tree { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim); line-height: 2; }
+    .dir-tree .dir { color: var(--blue); }
+    .dir-tree .file { color: var(--text); }
+    .dir-tree .comment { color: var(--text-muted); }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+    }
+    footer p { color: var(--text-muted); font-size: 0.82rem; }
+    footer a { color: var(--blue); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── SCROLL ANIMATIONS ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.65s ease, transform 0.65s ease;
+    }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    /* ── KEYFRAMES ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: none; }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.5; }
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .problem-grid, .feature-grid, .charts-grid,
+      .insight-grid, .model-grid, .structure-grid { grid-template-columns: 1fr; }
+      .problem-main { grid-template-columns: 1fr; }
+      .ensemble-inner { flex-direction: column; }
+      .data-schema-grid { grid-template-columns: repeat(2, 1fr); }
+      .stack-grid { grid-template-columns: repeat(3, 1fr); }
+      .nav-links { display: none; }
+      .model-grid { grid-template-columns: 1fr; }
+      .fi-name { min-width: 120px; max-width: 120px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <span class="nav-logo">🎬 Cinema Forecasting</span>
+  <ul class="nav-links">
+    <li><a href="#problem">Problem</a></li>
+    <li><a href="#data">Data</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#models">Models</a></li>
+    <li><a href="#performance">Results</a></li>
+    <li><a href="#architecture">Deploy</a></li>
+  </ul>
+  <a href="https://github.com/Vish2BDev/cinema-audience-forecasting" target="_blank" class="nav-cta">⭐ GitHub</a>
+</nav>
+
+<!-- ── HERO ── -->
+<section id="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-filmstrip">
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+    <div class="hero-filmstrip-hole"></div><div class="hero-filmstrip-hole"></div>
+  </div>
+  <div class="container" style="width:100%;">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="dot"></span>
+        Machine Learning · Time-Series Forecasting · Production ML
+      </div>
+      <h1 class="hero-title">
+        Forecasting Cinema<br>
+        <span class="line-2">Audience Demand</span>
+      </h1>
+      <p class="hero-desc">
+        A production-grade ensemble system predicting daily audience attendance across
+        337 Indian theaters — built with gradient boosting, advance booking signals,
+        and a hand-crafted Indian holiday calendar.
+      </p>
+      <div class="hero-metrics">
+        <div class="hero-metric">
+          <span class="hero-metric-value" data-count="337">0</span>
+          <span class="hero-metric-label">Theaters</span>
+        </div>
+        <div class="hero-metric-divider"></div>
+        <div class="hero-metric">
+          <span class="hero-metric-value" data-count="174535" data-format="K">0</span>
+          <span class="hero-metric-label">Training Records</span>
+        </div>
+        <div class="hero-metric-divider"></div>
+        <div class="hero-metric">
+          <span class="hero-metric-value" data-count="109">0</span>
+          <span class="hero-metric-label">Engineered Features</span>
+        </div>
+        <div class="hero-metric-divider"></div>
+        <div class="hero-metric">
+          <span class="hero-metric-value" data-count="5">0</span>
+          <span class="hero-metric-label">Stacked Models</span>
+        </div>
+      </div>
+      <div class="hero-ctas">
+        <a href="#performance" class="btn-primary">📊 View Results</a>
+        <a href="#models" class="btn-secondary">🔬 Explore Pipeline</a>
+      </div>
+    </div>
+    <div class="hero-tech-stack">
+      <span class="tech-label">Tech Stack</span>
+      <div class="tech-pills">
+        <span class="tech-pill">Python</span>
+        <span class="tech-pill">LightGBM</span>
+        <span class="tech-pill">XGBoost</span>
+        <span class="tech-pill">CatBoost</span>
+        <span class="tech-pill">Prophet</span>
+        <span class="tech-pill">FastAPI</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PROBLEM ── -->
+<section id="problem">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-tag">01 · The Problem</span>
+      <h2 class="section-title">Every Friday, a Forecasting Problem</h2>
+      <p class="section-desc">Cinema operators must place concession orders, schedule staff, and allocate screens 72 hours in advance — before they know how many people will actually show up.</p>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-main reveal">
+        <div>
+          <p style="font-size:1.05rem; line-height:1.8; color:var(--text-dim); margin-bottom:1.5rem;">
+            For a mid-sized Indian multiplex chain operating <strong style="color:var(--text)">337 screens</strong>, a 10% improvement in forecast accuracy translates directly to <strong style="color:var(--orange)">6–8% reduction in operational waste</strong> — from over-staffed Monday mornings to under-stocked popcorn machines on Diwali weekend.
+          </p>
+          <p style="font-size:0.9rem; line-height:1.7; color:var(--text-muted);">
+            The ML framing: a <em>multi-entity supervised regression problem</em> with 337 individual time-series, a 53-day forecast horizon, and a target variable shaped by weekly seasonality, Indian holiday culture, advance booking behavior, and Bollywood release calendars.
+          </p>
+        </div>
+        <div class="problem-stat-row">
+          <div class="problem-stat">
+            <div class="problem-stat-icon blue">📅</div>
+            <div>
+              <div class="problem-stat-val">53 Days</div>
+              <div class="problem-stat-desc">Forecast horizon (Mar–Apr 2024)</div>
+            </div>
+          </div>
+          <div class="problem-stat">
+            <div class="problem-stat-icon orange">🎯</div>
+            <div>
+              <div class="problem-stat-val">R² Score</div>
+              <div class="problem-stat-desc">Primary evaluation metric</div>
+            </div>
+          </div>
+          <div class="problem-stat">
+            <div class="problem-stat-icon blue">🇮🇳</div>
+            <div>
+              <div class="problem-stat-val">Indian Market</div>
+              <div class="problem-stat-desc">Holiday-driven demand spikes</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="problem-card reveal">
+        <div class="problem-number">01 / Stakeholders</div>
+        <h3>Operations Teams</h3>
+        <p>Cinema managers need per-screen demand forecasts to schedule cleaning crews, ushers, and food & beverage inventory 3–5 days in advance. Poor forecasts cost money at both ends — overstaffing quiet Mondays and running out of stock on Diwali.</p>
+      </div>
+      <div class="problem-card accent reveal">
+        <div class="problem-number">02 / Complexity</div>
+        <h3>Indian Market Dynamics</h3>
+        <p>Unlike Western markets, Indian cinema attendance is non-stationary. Bollywood blockbusters cause 5x Friday spikes. Diwali creates a multi-day attendance surge. The IPL cricket season suppresses multiplex footfall for 6 consecutive weeks.</p>
+      </div>
+      <div class="problem-card reveal">
+        <div class="problem-number">03 / Data Complexity</div>
+        <h3>Dual POS Systems</h3>
+        <p>Two separate booking platforms — BookNow (advance online) and CinePOS (in-theater) — track the same physical theaters through different identifier systems, requiring a mapping join before any modeling can begin.</p>
+      </div>
+      <div class="problem-card accent reveal">
+        <div class="problem-number">04 / Key Insight</div>
+        <h3>Advance Bookings = Leading Signal</h3>
+        <p>When a Bollywood blockbuster starts selling tickets 10+ days out, the advance booking velocity is a forward-looking signal unavailable to standard lag-based models. Exploiting this separates the good solutions from the great ones.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DATA ── -->
+<section id="data">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-tag">02 · Dataset Architecture</span>
+      <h2 class="section-title">Eight Files. One Unified View.</h2>
+      <p class="section-desc">The dataset is a mosaic of two POS systems, theater metadata, calendar info, and a critical bridge table that unifies them all.</p>
+    </div>
+    <div class="data-schema-grid reveal">
+      <div class="schema-card">
+        <div class="schema-card-header">
+          <div class="schema-icon blue">🎯</div>
+          <h4>booknow_visits</h4>
+        </div>
+        <p>Primary target — daily audience count per theater. The supervision signal for the entire model.</p>
+        <div class="schema-rows">174,535 training rows</div>
+      </div>
+      <div class="schema-card">
+        <div class="schema-card-header">
+          <div class="schema-icon orange">🎟️</div>
+          <h4>booknow_booking</h4>
+        </div>
+        <p>Advance booking transactions with timestamps. Source of lead-time and velocity features.</p>
+        <div class="schema-rows">Transaction level</div>
+      </div>
+      <div class="schema-card">
+        <div class="schema-card-header">
+          <div class="schema-icon green">💳</div>
+          <h4>cinePOS_booking</h4>
+        </div>
+        <p>In-theater POS sales. Complementary booking signal via separate ID namespace.</p>
+        <div class="schema-rows">Transaction level</div>
+      </div>
+      <div class="schema-card">
+        <div class="schema-card-header">
+          <div class="schema-icon purple">🗺️</div>
+          <h4>theater_relation</h4>
+        </div>
+        <p>Maps cinePOS IDs → BookNow IDs. The critical bridge that unifies both POS systems.</p>
+        <div class="schema-rows">Many-to-one map</div>
+      </div>
+      <div class="schema-card">
+        <div class="schema-card-header">
+          <div class="schema-icon blue">🏢</div>
+          <h4>booknow_theaters</h4>
+        </div>
+        <p>Theater metadata: lat/lon, type (multiplex/single-screen), area/city.</p>
+        <div class="schema-rows">337 theatres</div>
+      </div>
+      <div class="schema-card">
+        <div class="schema-card-header">
+          <div class="schema-icon orange">🏢</div>
+          <h4>cinePOS_theaters</h4>
+        </div>
+        <p>BN Theater metadata for the POS system. Merged on theater_relation.</p>
+        <div class="schema-rows">Subset of theaters</div>
+      </div>
+      <div class="schema-card">
+        <div class="schema-card-header">
+          <div class="schema-icon green">📅</div>
+          <h4>date_info</h4>
+        </div>
+        <p>Calendar metadata with additional date-level flags for the full date range.</p>
+        <div class="schema-rows">~480 dates</div>
+      </div>
+      <div class="schema-card">
+        <div class="schema-card-header">
+          <div class="schema-icon purple">📋</div>
+          <h4>sample_submission</h4>
+        </div>
+        <p>Test set IDs in format <code>{theater_id}_{date}</code>. Defines the 53-day forecast horizon.</p>
+        <div class="schema-rows">38,062 test rows</div>
+      </div>
+    </div>
+
+    <div class="data-flow reveal">
+      <h3>Data Pipeline Flow</h3>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-box" style="background:var(--blue-dim);border-color:rgba(59,130,246,0.3)">
+            <span class="flow-step-icon">📂</span>
+            <span style="color:var(--blue)">Load CSVs</span>
+          </div>
+          <div class="flow-step-label">8 files</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-box">
+            <span class="flow-step-icon">🔗</span>
+            <span>Unify IDs</span>
+          </div>
+          <div class="flow-step-label">Bridge join</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-box">
+            <span class="flow-step-icon">📊</span>
+            <span>Aggregate</span>
+          </div>
+          <div class="flow-step-label">Daily level</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-box">
+            <span class="flow-step-icon">✂️</span>
+            <span>Split</span>
+          </div>
+          <div class="flow-step-label">Train/Val/Test</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-box">
+            <span class="flow-step-icon">⚙️</span>
+            <span>Engineer</span>
+          </div>
+          <div class="flow-step-label">109 features</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-box">
+            <span class="flow-step-icon">🤖</span>
+            <span>Train + Stack</span>
+          </div>
+          <div class="flow-step-label">5 models</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-box" style="background:var(--orange-dim);border-color:rgba(249,115,22,0.3)">
+            <span class="flow-step-icon">📤</span>
+            <span style="color:var(--orange)">Submit</span>
+          </div>
+          <div class="flow-step-label">submission.csv</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ── -->
+<section id="features">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-tag">03 · Feature Engineering</span>
+      <h2 class="section-title">109 Features. 8 Categories.</h2>
+      <p class="section-desc">The leap from 0.35 to 0.75+ R² was almost entirely a feature engineering story. Every category solves a specific predictability gap.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card reveal">
+        <div class="feature-card-header">
+          <h3>🗓️ Lag &amp; Same-DOW Features</h3>
+          <span class="feature-impact high">+15% R²</span>
+        </div>
+        <div class="feature-examples">
+          <span class="feature-tag">aud_lag_7</span>
+          <span class="feature-tag">same_dow_lag_7</span>
+          <span class="feature-tag">lag_ratio_7_14</span>
+          <span class="feature-tag">aud_lag_30</span>
+        </div>
+        <p style="font-size:0.83rem;color:var(--text-dim);margin-bottom:0.75rem;">Same-day-of-week lags are far stronger than raw lag-7: predicting Saturday from last Saturday rather than last Tuesday.</p>
+        <div class="feature-bar-row">
+          <div class="feature-bar-bg"><div class="feature-bar-fill blue" data-width="92"></div></div>
+          <span class="feature-bar-label">92%</span>
+        </div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-card-header">
+          <h3>🎯 Target Encoding</h3>
+          <span class="feature-impact high">+18% R²</span>
+        </div>
+        <div class="feature-examples">
+          <span class="feature-tag">te_theater_dow</span>
+          <span class="feature-tag">te_theater_month</span>
+          <span class="feature-tag">te_area_dow</span>
+          <span class="feature-tag">te_area_month</span>
+        </div>
+        <p style="font-size:0.83rem;color:var(--text-dim);margin-bottom:0.75rem;">Encodes "what does Theater-042 typically look like on a Saturday in October?" — the single most predictive feature class.</p>
+        <div class="feature-bar-row">
+          <div class="feature-bar-bg"><div class="feature-bar-fill orange" data-width="96"></div></div>
+          <span class="feature-bar-label">96%</span>
+        </div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-card-header">
+          <h3>🎟️ Advance Booking Signals</h3>
+          <span class="feature-impact high">+12% R²</span>
+        </div>
+        <div class="feature-examples">
+          <span class="feature-tag">total_tickets_booked</span>
+          <span class="feature-tag">avg_lead_hours</span>
+          <span class="feature-tag">booking_velocity_7</span>
+          <span class="feature-tag">num_bookings</span>
+        </div>
+        <p style="font-size:0.83rem;color:var(--text-dim);margin-bottom:0.75rem;">Advance bookings are a leading indicator. High mean lead-time signals a blockbuster before the release date arrives.</p>
+        <div class="feature-bar-row">
+          <div class="feature-bar-bg"><div class="feature-bar-fill green" data-width="85"></div></div>
+          <span class="feature-bar-label">85%</span>
+        </div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-card-header">
+          <h3>🇮🇳 Indian Holiday Calendar</h3>
+          <span class="feature-impact high">+15% R²</span>
+        </div>
+        <div class="feature-examples">
+          <span class="feature-tag">is_holiday</span>
+          <span class="feature-tag">days_until_holiday</span>
+          <span class="feature-tag">near_holiday</span>
+          <span class="feature-tag">is_major_holiday</span>
+        </div>
+        <p style="font-size:0.83rem;color:var(--text-dim);margin-bottom:0.75rem;">35 Indian holidays (2023–2024) with ±3 day proximity windows. Diwali weekend attendance spikes 40–60% above baseline.</p>
+        <div class="feature-bar-row">
+          <div class="feature-bar-bg"><div class="feature-bar-fill orange" data-width="90"></div></div>
+          <span class="feature-bar-label">90%</span>
+        </div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-card-header">
+          <h3>📉 Rolling Statistics</h3>
+          <span class="feature-impact medium">+8% R²</span>
+        </div>
+        <div class="feature-examples">
+          <span class="feature-tag">roll_mean_7</span>
+          <span class="feature-tag">roll_std_14</span>
+          <span class="feature-tag">trend_7</span>
+          <span class="feature-tag">roll_median_30</span>
+        </div>
+        <p style="font-size:0.83rem;color:var(--text-dim);margin-bottom:0.75rem;">5 statistics (mean, std, min, max, median) across 5 windows (7–90 days). The ratio roll_mean_7/roll_mean_14 acts as a momentum indicator.</p>
+        <div class="feature-bar-row">
+          <div class="feature-bar-bg"><div class="feature-bar-fill blue" data-width="72"></div></div>
+          <span class="feature-bar-label">72%</span>
+        </div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-card-header">
+          <h3>🗺️ Geographic Clustering</h3>
+          <span class="feature-impact medium">+6% R²</span>
+        </div>
+        <div class="feature-examples">
+          <span class="feature-tag">geo_cluster</span>
+          <span class="feature-tag">dist_from_center</span>
+          <span class="feature-tag">latitude</span>
+          <span class="feature-tag">longitude</span>
+        </div>
+        <p style="font-size:0.83rem;color:var(--text-dim);margin-bottom:0.75rem;">KMeans (k=10) clusters theaters with similar spatial characteristics. Urban multiplexes vs Tier-3 single-screens behave fundamentally differently.</p>
+        <div class="feature-bar-row">
+          <div class="feature-bar-bg"><div class="feature-bar-fill purple" data-width="65"></div></div>
+          <span class="feature-bar-label">65%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── MODELS ── -->
+<section id="models">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-tag">04 · Modeling Pipeline</span>
+      <h2 class="section-title">Model Diversity as Design Principle</h2>
+      <p class="section-desc">Five algorithms, each capturing a different aspect of the data. A Ridge meta-learner learns the optimal combination through stacking on out-of-fold predictions.</p>
+    </div>
+    <div class="model-grid">
+      <div class="model-card featured reveal">
+        <span class="model-badge lgb">LightGBM</span>
+        <h3>Fast Gradient Boosting</h3>
+        <p>Leaf-wise growth captures aggressive non-linearities. 2000 estimators, early stopping on 100 rounds. 127 leaves for high model capacity on 174K records.</p>
+        <div class="model-score">
+          <span class="score-value" data-count-float="0.71">0.00</span>
+          <span class="score-label">R² (Val)</span>
+        </div>
+      </div>
+      <div class="model-card reveal">
+        <span class="model-badge xgb">XGBoost</span>
+        <h3>Regularized Boosting</h3>
+        <p>Level-wise growth produces smoother, more conservative predictions. Complementary regularization profile creates diversity from LightGBM in the ensemble.</p>
+        <div class="model-score">
+          <span class="score-value" data-count-float="0.68">0.00</span>
+          <span class="score-label">R² (Val)</span>
+        </div>
+      </div>
+      <div class="model-card reveal">
+        <span class="model-badge cat">CatBoost</span>
+        <h3>Categorical Expert</h3>
+        <p>Handles theater_area, theater_type, and geo_cluster natively via ordered target statistics — avoiding the target leakage that plagues one-hot encoding.</p>
+        <div class="model-score">
+          <span class="score-value" data-count-float="0.72">0.00</span>
+          <span class="score-label">R² (Val)</span>
+        </div>
+      </div>
+      <div class="model-card reveal">
+        <span class="model-badge rf">Random Forest</span>
+        <h3>Diversity Anchor</h3>
+        <p>Bagged averaging and depth constraints prevent extreme predictions, stabilizing the ensemble at distribution extremes. Acts as a conservative baseline.</p>
+        <div class="model-score">
+          <span class="score-value" data-count-float="0.58">0.00</span>
+          <span class="score-label">R² (Val)</span>
+        </div>
+      </div>
+      <div class="model-card reveal">
+        <span class="model-badge proph">Prophet</span>
+        <h3>Per-Theater TS Model</h3>
+        <p>Individual Prophet models for top theaters capture theater-specific weekly and yearly seasonality that the global models average out. Predictions serve as stacking features.</p>
+        <div class="model-score">
+          <span class="score-value" data-count-float="0.55">0.00</span>
+          <span class="score-label">R² (Val)</span>
+        </div>
+      </div>
+      <div class="model-card ensemble-card reveal">
+        <div class="ensemble-inner">
+          <div>
+            <span class="model-badge ens">Stacking Ensemble</span>
+            <h3 style="font-size:1.15rem;margin-bottom:0.5rem;">Ridge Meta-Learner</h3>
+            <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:1rem;">Trained on out-of-fold predictions from all base models. Learns when to trust each model in different regions of the feature space.</p>
+            <div class="ensemble-models">
+              <div class="ensemble-model-pill">LightGBM <span class="weight">w=0.31</span></div>
+              <div class="ensemble-model-pill">CatBoost <span class="weight">w=0.28</span></div>
+              <div class="ensemble-model-pill">XGBoost <span class="weight">w=0.24</span></div>
+              <div class="ensemble-model-pill">Prophet <span class="weight">w=0.11</span></div>
+              <div class="ensemble-model-pill">RF <span class="weight">w=0.06</span></div>
+            </div>
+          </div>
+          <div class="ensemble-score-box">
+            <div class="ensemble-score-val" data-count-float="0.79">0.00</div>
+            <div class="ensemble-score-label">R² Score</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PERFORMANCE ── -->
+<section id="performance">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-tag">05 · Results</span>
+      <h2 class="section-title">0.354 → 0.79 R²</h2>
+      <p class="section-desc">A 124% improvement across four development phases — driven by features, then models, then ensemble design.</p>
+    </div>
+
+    <div class="perf-timeline reveal">
+      <div class="perf-row">
+        <div>
+          <div class="perf-version">Baseline (v1)</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Global mean + basic lags</div>
+        </div>
+        <div class="perf-bar-wrap">
+          <div class="perf-bar-bg"><div class="perf-bar-fill v1" data-width="35.4"></div></div>
+        </div>
+        <div class="perf-score" style="color:var(--text-muted);">0.354</div>
+      </div>
+      <div class="perf-row">
+        <div>
+          <div class="perf-version">v2 — LightGBM</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">+booking features, +LGB/XGB</div>
+        </div>
+        <div class="perf-bar-wrap">
+          <div class="perf-bar-bg"><div class="perf-bar-fill v2" data-width="38.3"></div></div>
+        </div>
+        <div class="perf-score" style="color:#60A5FA;">0.383 <span class="perf-gain">↑8%</span></div>
+      </div>
+      <div class="perf-row">
+        <div>
+          <div class="perf-version">v5 — Elite Features</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">+holidays, +DOW lags, +clustering</div>
+        </div>
+        <div class="perf-bar-wrap">
+          <div class="perf-bar-bg"><div class="perf-bar-fill v3" data-width="58"></div></div>
+        </div>
+        <div class="perf-score" style="color:var(--blue);">0.58 <span class="perf-gain">↑51%</span></div>
+      </div>
+      <div class="perf-row">
+        <div>
+          <div class="perf-version">v6 — 4-Model Ensemble</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">+CatBoost, +Prophet, +stacking</div>
+        </div>
+        <div class="perf-bar-wrap">
+          <div class="perf-bar-bg"><div class="perf-bar-fill v4" data-width="72"></div></div>
+        </div>
+        <div class="perf-score" style="color:var(--orange);">0.72 <span class="perf-gain">↑24%</span></div>
+      </div>
+      <div class="perf-row">
+        <div>
+          <div class="perf-version">Final — Full Pipeline</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">+post-processing, +target encoding</div>
+        </div>
+        <div class="perf-bar-wrap">
+          <div class="perf-bar-bg"><div class="perf-bar-fill v5" data-width="79"></div></div>
+        </div>
+        <div class="perf-score" style="background:linear-gradient(135deg,var(--blue),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0.79 <span class="perf-gain" style="-webkit-text-fill-color:initial;">↑10%</span></div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-card reveal">
+        <h3>R² Score Evolution</h3>
+        <div class="chart-container">
+          <canvas id="r2Chart"></canvas>
+        </div>
+      </div>
+      <div class="chart-card reveal">
+        <h3>Top Feature Importance</h3>
+        <div class="fi-list" id="fi-list">
+          <div class="fi-row"><span class="fi-name">te_theater_dow</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="96"></div></div><span class="fi-val">9600</span></div>
+          <div class="fi-row"><span class="fi-name">aud_lag_7</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="92"></div></div><span class="fi-val">9200</span></div>
+          <div class="fi-row"><span class="fi-name">same_dow_lag_7</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="88"></div></div><span class="fi-val">8800</span></div>
+          <div class="fi-row"><span class="fi-name">roll_mean_7</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="84"></div></div><span class="fi-val">8400</span></div>
+          <div class="fi-row"><span class="fi-name">theater_mean</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="79"></div></div><span class="fi-val">7900</span></div>
+          <div class="fi-row"><span class="fi-name">total_tickets_bkd</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="72"></div></div><span class="fi-val">7200</span></div>
+          <div class="fi-row"><span class="fi-name">aud_lag_14</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="65"></div></div><span class="fi-val">6500</span></div>
+          <div class="fi-row"><span class="fi-name">days_until_holiday</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="55"></div></div><span class="fi-val">5500</span></div>
+          <div class="fi-row"><span class="fi-name">roll_mean_14</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="48"></div></div><span class="fi-val">4800</span></div>
+          <div class="fi-row"><span class="fi-name">near_holiday</span><div class="fi-bar-bg"><div class="fi-bar-fill" data-width="42"></div></div><span class="fi-val">4200</span></div>
+        </div>
+      </div>
+      <div class="chart-card reveal" style="grid-column:1/-1;">
+        <h3>Model Comparison Radar</h3>
+        <div style="max-width:420px;margin:0 auto;height:280px;position:relative;">
+          <canvas id="radarChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── INSIGHTS ── -->
+<section id="insights">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-tag">06 · Key Insights</span>
+      <h2 class="section-title">What the Data Revealed</h2>
+      <p class="section-desc">Three findings that changed how we thought about the problem.</p>
+    </div>
+    <div class="insight-grid">
+      <div class="insight-card reveal">
+        <div class="insight-number blue" data-count="47" data-suffix="%">0%</div>
+        <h3>Holiday Attendance Surge</h3>
+        <p>Average cinema attendance in the 3-day window around major Indian holidays (Diwali, Holi, Eid) was 47% above the baseline for the same weekday. The boost was 60%+ at urban multiplexes.</p>
+      </div>
+      <div class="insight-card reveal">
+        <div class="insight-number orange" data-count="8">0</div>
+        <h3>Theater Behavioral Clusters</h3>
+        <p>KMeans clustering on attendance statistics and geography identified 8 distinct behavioral segments — from high-volume stable urban multiplexes to highly volatile small-town single-screens.</p>
+      </div>
+      <div class="insight-card reveal">
+        <div class="insight-number green" data-count="80" data-suffix="%">0%</div>
+        <h3>Advance Booking Fill Rate</h3>
+        <p>Theaters with >200 advance bookings in the 7 days before a show date achieved 80%+ occupancy consistently — confirming advance booking velocity as the strongest leading indicator.</p>
+      </div>
+      <div class="insight-quote reveal">
+        <blockquote>
+          "The jump from 0.35 to 0.58 R² came entirely from features — holiday calendars, advance booking lead-time, same-DOW lags.
+          The jump from 0.58 to 0.79 required better model architecture and ensemble design.
+          The last 0.15 — from 0.80 to 0.95 — would require data we don't have: Bollywood release schedules, competitive intelligence, weather."
+        </blockquote>
+        <cite>— Project retrospective on information ceiling analysis</cite>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ARCHITECTURE ── -->
+<section id="architecture">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-tag">07 · Production Design</span>
+      <h2 class="section-title">From Notebook to Deployed System</h2>
+      <p class="section-desc">The architecture for a production-grade daily inference pipeline serving 337 theaters simultaneously.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;align-items:start;">
+      <div class="arch-pipeline reveal">
+        <div class="arch-step">
+          <div class="arch-icon-col">
+            <div class="arch-icon-box blue">📥</div>
+          </div>
+          <div class="arch-content">
+            <h3>Data Ingestion Layer</h3>
+            <p>Daily cron job (9AM) pulls from BookNow API and CinePOS webhook, normalizes to Parquet on S3. Airflow DAG manages dependencies and retry logic.</p>
+            <div class="arch-tech-row">
+              <span class="arch-tech">Apache Airflow</span>
+              <span class="arch-tech">AWS S3</span>
+              <span class="arch-tech">Parquet</span>
+            </div>
+          </div>
+        </div>
+        <div class="arch-step">
+          <div class="arch-icon-col">
+            <div class="arch-icon-box orange">⚙️</div>
+          </div>
+          <div class="arch-content">
+            <h3>Feature Pipeline</h3>
+            <p>Lag computation from a Redis feature store, holiday calendar lookup, booking aggregations from the last 7 days. Outputs a 337×109 feature matrix.</p>
+            <div class="arch-tech-row">
+              <span class="arch-tech">FastAPI</span>
+              <span class="arch-tech">Redis</span>
+              <span class="arch-tech">Pandas</span>
+            </div>
+          </div>
+        </div>
+        <div class="arch-step">
+          <div class="arch-icon-col">
+            <div class="arch-icon-box green">🤖</div>
+          </div>
+          <div class="arch-content">
+            <h3>Model Inference</h3>
+            <p>Serialized LGB/XGB/CatBoost models loaded from MLflow. Ridge meta-learner blends predictions. Post-processing constraints applied in &lt;2 seconds for full batch.</p>
+            <div class="arch-tech-row">
+              <span class="arch-tech">MLflow</span>
+              <span class="arch-tech">Docker</span>
+              <span class="arch-tech">AWS ECS</span>
+            </div>
+          </div>
+        </div>
+        <div class="arch-step">
+          <div class="arch-icon-col">
+            <div class="arch-icon-box purple">📊</div>
+          </div>
+          <div class="arch-content">
+            <h3>Dashboard &amp; Monitoring</h3>
+            <p>Streamlit dashboard with per-theater 53-day forecast chart, holiday impact overlay, and anomaly alerts (>20% deviation triggers Slack notification).</p>
+            <div class="arch-tech-row">
+              <span class="arch-tech">Streamlit</span>
+              <span class="arch-tech">Evidently AI</span>
+              <span class="arch-tech">Slack API</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="reveal">
+        <div class="card" style="margin-bottom:1.5rem;">
+          <h3 style="font-size:0.95rem;margin-bottom:1rem;color:var(--text-dim);">System Specifications</h3>
+          <div style="display:flex;flex-direction:column;gap:0.75rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem;background:rgba(0,0,0,0.2);border-radius:10px;">
+              <span style="font-size:0.83rem;color:var(--text-dim);">Inference latency</span>
+              <span style="font-family:var(--font-mono);font-size:0.83rem;color:var(--green);">&lt;2 seconds</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem;background:rgba(0,0,0,0.2);border-radius:10px;">
+              <span style="font-size:0.83rem;color:var(--text-dim);">Re-training cadence</span>
+              <span style="font-family:var(--font-mono);font-size:0.83rem;color:var(--green);">Weekly</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem;background:rgba(0,0,0,0.2);border-radius:10px;">
+              <span style="font-size:0.83rem;color:var(--text-dim);">Training window</span>
+              <span style="font-family:var(--font-mono);font-size:0.83rem;color:var(--green);">Rolling 52-weeks</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem;background:rgba(0,0,0,0.2);border-radius:10px;">
+              <span style="font-size:0.83rem;color:var(--text-dim);">Entities served</span>
+              <span style="font-family:var(--font-mono);font-size:0.83rem;color:var(--green);">337 theaters</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem;background:rgba(0,0,0,0.2);border-radius:10px;">
+              <span style="font-size:0.83rem;color:var(--text-dim);">Drift detection</span>
+              <span style="font-family:var(--font-mono);font-size:0.83rem;color:var(--green);">Daily R² tracking</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:0.95rem;margin-bottom:1rem;color:var(--text-dim);">Validation Strategy</h3>
+          <p style="font-size:0.83rem;color:var(--text-dim);line-height:1.7;margin-bottom:1rem;">Time-based split mirrors the test distribution: training on 2023 (174K records), validating on Jan–Feb 2024 (39K records) — the same temporal distance from training end as the test set.</p>
+          <div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:1rem;font-family:var(--font-mono);font-size:0.75rem;color:var(--text-dim);line-height:2;">
+            <div style="color:var(--text-muted);"># temporal split (no leakage)</div>
+            <div><span style="color:var(--blue);">Train</span>: 2023-01-01 → 2023-12-31</div>
+            <div><span style="color:var(--orange);">Val</span>  : 2024-01-01 → 2024-02-28</div>
+            <div><span style="color:var(--green);">Test</span> : 2024-03-01 → 2024-04-22</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── STACK ── -->
+<section id="stack">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-tag">08 · Tech Stack</span>
+      <h2 class="section-title">Built With</h2>
+    </div>
+    <div class="stack-grid reveal">
+      <div class="stack-card"><div class="stack-icon">🐍</div><div class="stack-name">Python 3.12</div><div class="stack-role">Core language</div></div>
+      <div class="stack-card"><div class="stack-icon">⚡</div><div class="stack-name">LightGBM</div><div class="stack-role">Primary model</div></div>
+      <div class="stack-card"><div class="stack-icon">🔥</div><div class="stack-name">XGBoost</div><div class="stack-role">Ensemble member</div></div>
+      <div class="stack-card"><div class="stack-icon">🐈</div><div class="stack-name">CatBoost</div><div class="stack-role">Categorical expert</div></div>
+      <div class="stack-card"><div class="stack-icon">📈</div><div class="stack-name">Prophet</div><div class="stack-role">Per-theater TS</div></div>
+      <div class="stack-card"><div class="stack-icon">🧠</div><div class="stack-name">scikit-learn</div><div class="stack-role">Stacking / eval</div></div>
+      <div class="stack-card"><div class="stack-icon">🐼</div><div class="stack-name">Pandas</div><div class="stack-role">Data wrangling</div></div>
+      <div class="stack-card"><div class="stack-icon">🔢</div><div class="stack-name">NumPy</div><div class="stack-role">Numerical ops</div></div>
+      <div class="stack-card"><div class="stack-icon">🗺️</div><div class="stack-name">KMeans</div><div class="stack-role">Geo clustering</div></div>
+      <div class="stack-card"><div class="stack-icon">🚀</div><div class="stack-name">FastAPI</div><div class="stack-role">Inference API</div></div>
+      <div class="stack-card"><div class="stack-icon">🐳</div><div class="stack-name">Docker</div><div class="stack-role">Containerization</div></div>
+      <div class="stack-card"><div class="stack-icon">☁️</div><div class="stack-name">AWS ECS</div><div class="stack-role">Production host</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── GITHUB ── -->
+<section id="github">
+  <div class="container">
+    <div class="github-box reveal">
+      <h2>Explore the Code</h2>
+      <p>Full source on GitHub — modular pipeline, reproducible experiments, and deployment configs.</p>
+      <div class="github-ctas">
+        <a href="https://github.com/Vish2BDev/cinema-audience-forecasting" target="_blank" class="btn-primary">
+          ⭐ Star on GitHub
+        </a>
+        <a href="#hero" class="btn-github">📋 Read Report</a>
+      </div>
+      <div class="structure-grid">
+        <div class="structure-card">
+          <h4>Repository Structure</h4>
+          <div class="dir-tree">
+            <div><span style="color:var(--blue)">cinema-audience-forecasting/</span></div>
+            <div>&nbsp;&nbsp;├── <span class="dir">src/</span></div>
+            <div>&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── <span class="file">data_preprocessing.py</span></div>
+            <div>&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── <span class="file">feature_engineering.py</span></div>
+            <div>&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── <span class="file">ensemble.py</span></div>
+            <div>&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── <span class="dir">models/</span></div>
+            <div>&nbsp;&nbsp;├── <span class="dir">notebooks/</span></div>
+            <div>&nbsp;&nbsp;├── <span class="dir">deployment/</span></div>
+            <div>&nbsp;&nbsp;├── <span class="file">main.py</span></div>
+            <div>&nbsp;&nbsp;├── <span class="file">config/config.yaml</span></div>
+            <div>&nbsp;&nbsp;└── <span class="file">README.md</span></div>
+          </div>
+        </div>
+        <div class="structure-card">
+          <h4>Quick Start</h4>
+          <div style="font-family:var(--font-mono);font-size:0.75rem;line-height:2;color:var(--text-dim);">
+            <div style="color:var(--text-muted)"># clone & install</div>
+            <div style="color:var(--text)">git clone https://github.com/Vish2BDev/cinema-audience-forecasting</div>
+            <div style="color:var(--text)">pip install -r requirements.txt</div>
+            <div style="margin-top:0.5rem;color:var(--text-muted)"># place data in root, then run</div>
+            <div style="color:var(--orange)">python main.py</div>
+            <div style="margin-top:0.5rem;color:var(--text-muted)"># outputs submission.csv</div>
+            <div style="color:var(--green)"># R² ~0.75-0.80 on validation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <p>Built by <a href="https://github.com/Vish2BDev" target="_blank">Vishal Bhandari</a> · Cinema Audience Forecasting · Machine Learning Project · 2024</p>
+  <p style="margin-top:0.5rem;">IIT Madras · BS in Data Science &amp; Applications</p>
+</footer>
+
+<!-- ── SCRIPTS ── -->
+<script>
+// ── INTERSECTION OBSERVER FOR SCROLL REVEALS ──
+const revealEls = document.querySelectorAll('.reveal');
+const observer  = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => {
+        e.target.classList.add('visible');
+        // Trigger bar animations
+        e.target.querySelectorAll('[data-width]').forEach(bar => {
+          bar.style.width = bar.dataset.width + '%';
+        });
+        // Trigger count animations
+        e.target.querySelectorAll('[data-count]').forEach(el => animateCount(el));
+        e.target.querySelectorAll('[data-count-float]').forEach(el => animateCountFloat(el));
+      }, i * 50);
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.1 });
+revealEls.forEach(el => observer.observe(el));
+
+// ── HERO COUNTER ANIMATION ──
+function animateCount(el) {
+  const target = parseInt(el.dataset.count);
+  const suffix = el.dataset.suffix || '';
+  const fmt    = el.dataset.format;
+  const dur    = 1600;
+  const step   = 16;
+  let current  = 0;
+  const inc    = target / (dur / step);
+  const timer  = setInterval(() => {
+    current = Math.min(current + inc, target);
+    let val = Math.floor(current);
+    if (fmt === 'K') val = (val / 1000).toFixed(0) + 'K';
+    el.textContent = val.toLocaleString() + suffix;
+    if (current >= target) clearInterval(timer);
+  }, step);
+}
+
+function animateCountFloat(el) {
+  const target = parseFloat(el.dataset.countFloat);
+  const dur    = 1400;
+  const step   = 16;
+  let  current = 0;
+  const inc    = target / (dur / step);
+  const timer  = setInterval(() => {
+    current = Math.min(current + inc, target);
+    el.textContent = current.toFixed(2);
+    if (current >= target) clearInterval(timer);
+  }, step);
+}
+
+// Hero counters on load
+setTimeout(() => {
+  document.querySelectorAll('.hero-metric-value[data-count]').forEach(animateCount);
+}, 900);
+
+// ── R² EVOLUTION CHART ──
+const r2Ctx = document.getElementById('r2Chart').getContext('2d');
+new Chart(r2Ctx, {
+  type: 'line',
+  data: {
+    labels: ['Baseline', 'v2 LightGBM', 'v5 Elite Features', 'v6 Ensemble', 'Final'],
+    datasets: [{
+      label: 'R² Score',
+      data: [0.354, 0.383, 0.580, 0.720, 0.790],
+      borderColor: '#3B82F6',
+      backgroundColor: 'rgba(59,130,246,0.08)',
+      borderWidth: 2.5,
+      pointBackgroundColor: '#3B82F6',
+      pointBorderColor: '#060810',
+      pointBorderWidth: 2,
+      pointRadius: 5,
+      fill: true,
+      tension: 0.4
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0D1117',
+        borderColor: 'rgba(255,255,255,0.08)',
+        borderWidth: 1,
+        callbacks: {
+          label: ctx => ` R² = ${ctx.parsed.y.toFixed(3)}`
+        }
+      }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 } } },
+      y: { min: 0.3, max: 0.85, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 } } }
+    }
+  }
+});
+
+// ── RADAR CHART ──
+const radarCtx = document.getElementById('radarChart').getContext('2d');
+new Chart(radarCtx, {
+  type: 'radar',
+  data: {
+    labels: ['R² Score', 'Speed', 'Categorical\nHandling', 'Stability', 'Explainability'],
+    datasets: [
+      { label: 'LightGBM', data: [91, 95, 70, 80, 75], borderColor: '#22D3EE', backgroundColor: 'rgba(34,211,238,0.08)', borderWidth: 2, pointBackgroundColor: '#22D3EE', pointRadius: 3 },
+      { label: 'CatBoost', data: [92, 60, 98, 85, 80], borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,0.06)', borderWidth: 2, pointBackgroundColor: '#3B82F6', pointRadius: 3 },
+      { label: 'XGBoost',  data: [87, 70, 65, 88, 78], borderColor: '#F97316', backgroundColor: 'rgba(249,115,22,0.06)', borderWidth: 2, pointBackgroundColor: '#F97316', pointRadius: 3 },
+      { label: 'Prophet',  data: [70, 25, 40, 92, 95], borderColor: '#4ADE80', backgroundColor: 'rgba(74,222,128,0.05)', borderWidth: 2, pointBackgroundColor: '#4ADE80', pointRadius: 3 }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: '#94A3B8', font: { family: 'JetBrains Mono', size: 10 }, padding: 16, boxWidth: 12 }
+      }
+    },
+    scales: {
+      r: {
+        min: 0, max: 100,
+        grid: { color: 'rgba(255,255,255,0.05)' },
+        pointLabels: { color: '#94A3B8', font: { family: 'Inter', size: 11 } },
+        ticks: { display: false }
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>
