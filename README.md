@@ -8,7 +8,7 @@
 
 Predicting daily cinema attendance across 337 Indian theaters — 174,535 training rows, 109 engineered features, and a stacking ensemble of five models that pushed validation R² from **0.354 to 0.79**.
 
-🔗 **[Live Project Report](https://portfolio-1y8m79lua-vishal-bhandaris-projects.vercel.app)**
+🔗 **[Live Project Report](https://vmlp-forecasting-project.vercel.app)**
 
 ---
 
