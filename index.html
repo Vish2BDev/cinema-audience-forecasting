@@ -794,7 +794,27 @@
       transition: all 0.2s;
     }
     .stack-card:hover { border-color: rgba(59,130,246,0.3); transform: translateY(-3px); }
-    .stack-icon { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    .stack-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stack-icon img { width: 40px; height: 40px; display: block; }
+    .letter-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      border: 1.5px solid;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
     .stack-name { font-size: 0.78rem; font-weight: 600; color: var(--text); }
     .stack-role { font-size: 0.68rem; color: var(--text-muted); margin-top: 0.15rem; }
 
@@ -1640,18 +1660,18 @@
       <h2 class="section-title">Built With</h2>
     </div>
     <div class="stack-grid reveal">
-      <div class="stack-card"><div class="stack-icon">🐍</div><div class="stack-name">Python 3.12</div><div class="stack-role">Core language</div></div>
-      <div class="stack-card"><div class="stack-icon">⚡</div><div class="stack-name">LightGBM</div><div class="stack-role">Primary model</div></div>
-      <div class="stack-card"><div class="stack-icon">🔥</div><div class="stack-name">XGBoost</div><div class="stack-role">Ensemble member</div></div>
-      <div class="stack-card"><div class="stack-icon">🐈</div><div class="stack-name">CatBoost</div><div class="stack-role">Categorical expert</div></div>
-      <div class="stack-card"><div class="stack-icon">📈</div><div class="stack-name">Prophet</div><div class="stack-role">Per-theater TS</div></div>
-      <div class="stack-card"><div class="stack-icon">🧠</div><div class="stack-name">scikit-learn</div><div class="stack-role">Stacking / eval</div></div>
-      <div class="stack-card"><div class="stack-icon">🐼</div><div class="stack-name">Pandas</div><div class="stack-role">Data wrangling</div></div>
-      <div class="stack-card"><div class="stack-icon">🔢</div><div class="stack-name">NumPy</div><div class="stack-role">Numerical ops</div></div>
-      <div class="stack-card"><div class="stack-icon">🗺️</div><div class="stack-name">KMeans</div><div class="stack-role">Geo clustering</div></div>
-      <div class="stack-card"><div class="stack-icon">🚀</div><div class="stack-name">FastAPI</div><div class="stack-role">Inference API</div></div>
-      <div class="stack-card"><div class="stack-icon">🐳</div><div class="stack-name">Docker</div><div class="stack-role">Containerization</div></div>
-      <div class="stack-card"><div class="stack-icon">☁️</div><div class="stack-name">AWS ECS</div><div class="stack-role">Production host</div></div>
+      <div class="stack-card"><div class="stack-icon"><img src="https://cdn.simpleicons.org/python/3776AB" alt="Python" width="40" height="40" loading="lazy"></div><div class="stack-name">Python 3.12</div><div class="stack-role">Core language</div></div>
+      <div class="stack-card"><div class="stack-icon"><div class="letter-icon" style="font-size:10px;color:#86EFAC;background:rgba(134,239,172,0.12);border-color:rgba(134,239,172,0.3);">LGB</div></div><div class="stack-name">LightGBM</div><div class="stack-role">Primary model</div></div>
+      <div class="stack-card"><div class="stack-icon"><div class="letter-icon" style="font-size:10px;color:#60A5FA;background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.3);">XGB</div></div><div class="stack-name">XGBoost</div><div class="stack-role">Ensemble member</div></div>
+      <div class="stack-card"><div class="stack-icon"><div class="letter-icon" style="font-size:12px;color:#FACC15;background:rgba(250,204,21,0.12);border-color:rgba(250,204,21,0.3);">CB</div></div><div class="stack-name">CatBoost</div><div class="stack-role">Categorical expert</div></div>
+      <div class="stack-card"><div class="stack-icon"><div class="letter-icon" style="font-size:18px;color:#C084FC;background:rgba(192,132,252,0.12);border-color:rgba(192,132,252,0.3);">P</div></div><div class="stack-name">Prophet</div><div class="stack-role">Per-theater TS</div></div>
+      <div class="stack-card"><div class="stack-icon"><img src="https://cdn.simpleicons.org/scikitlearn/F7931E" alt="scikit-learn" width="40" height="40" loading="lazy"></div><div class="stack-name">scikit-learn</div><div class="stack-role">Stacking / eval</div></div>
+      <div class="stack-card"><div class="stack-icon"><img src="https://cdn.simpleicons.org/pandas/E70488" alt="Pandas" width="40" height="40" loading="lazy"></div><div class="stack-name">Pandas</div><div class="stack-role">Data wrangling</div></div>
+      <div class="stack-card"><div class="stack-icon"><img src="https://cdn.simpleicons.org/numpy/4DABCF" alt="NumPy" width="40" height="40" loading="lazy"></div><div class="stack-name">NumPy</div><div class="stack-role">Numerical ops</div></div>
+      <div class="stack-card"><div class="stack-icon"><div class="letter-icon" style="font-size:18px;color:#F97316;background:rgba(249,115,22,0.12);border-color:rgba(249,115,22,0.3);">K</div></div><div class="stack-name">KMeans</div><div class="stack-role">Geo clustering</div></div>
+      <div class="stack-card"><div class="stack-icon"><img src="https://cdn.simpleicons.org/fastapi/009688" alt="FastAPI" width="40" height="40" loading="lazy"></div><div class="stack-name">FastAPI</div><div class="stack-role">Inference API</div></div>
+      <div class="stack-card"><div class="stack-icon"><img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker" width="40" height="40" loading="lazy"></div><div class="stack-name">Docker</div><div class="stack-role">Containerization</div></div>
+      <div class="stack-card"><div class="stack-icon"><img src="https://cdn.simpleicons.org/amazonaws/FF9900" alt="AWS ECS" width="40" height="40" loading="lazy"></div><div class="stack-name">AWS ECS</div><div class="stack-role">Production host</div></div>
     </div>
   </div>
 </section>
