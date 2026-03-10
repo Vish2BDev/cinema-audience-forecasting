@@ -256,23 +256,25 @@
     }
     .btn-secondary:hover { border-color: rgba(255,255,255,0.2); color: var(--text); background: var(--bg-card); }
     .hero-tech-stack {
-      position: absolute;
-      bottom: 3rem;
-      right: 0;
       display: flex;
-      gap: 0.75rem;
-      flex-direction: column;
-      align-items: flex-end;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
       opacity: 0;
-      animation: fadeUp 0.6s 1s forwards;
+      animation: fadeUp 0.6s 0.85s forwards;
     }
     .tech-label {
       font-size: 0.72rem;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.1em;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .tech-pills { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+    .tech-pills { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .tech-pill {
       padding: 0.25rem 0.75rem;
       background: var(--bg-card);
@@ -980,16 +982,16 @@
         <a href="#performance" class="btn-primary">📊 View Results</a>
         <a href="#models" class="btn-secondary">🔬 Explore Pipeline</a>
       </div>
-    </div>
-    <div class="hero-tech-stack">
-      <span class="tech-label">Tech Stack</span>
-      <div class="tech-pills">
-        <span class="tech-pill">Python</span>
-        <span class="tech-pill">LightGBM</span>
-        <span class="tech-pill">XGBoost</span>
-        <span class="tech-pill">CatBoost</span>
-        <span class="tech-pill">Prophet</span>
-        <span class="tech-pill">FastAPI</span>
+      <div class="hero-tech-stack">
+        <span class="tech-label">Built with</span>
+        <div class="tech-pills">
+          <span class="tech-pill">Python</span>
+          <span class="tech-pill">LightGBM</span>
+          <span class="tech-pill">XGBoost</span>
+          <span class="tech-pill">CatBoost</span>
+          <span class="tech-pill">Prophet</span>
+          <span class="tech-pill">FastAPI</span>
+        </div>
       </div>
     </div>
   </div>
@@ -1514,7 +1516,7 @@
         <blockquote>
           "The jump from 0.35 to 0.58 R² came entirely from features — holiday calendars, advance booking lead-time, same-DOW lags.
           The jump from 0.58 to 0.79 required better model architecture and ensemble design.
-          The last 0.15 — from 0.80 to 0.95 — would require data we don't have: Bollywood release schedules, competitive intelligence, weather."
+          The last 0.16 — from 0.79 to 0.95 — would require data we don't have: Bollywood release schedules, competitive intelligence, weather."
         </blockquote>
         <cite>— Project retrospective on information ceiling analysis</cite>
       </div>
@@ -1677,8 +1679,8 @@
             <div>&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── <span class="file">ensemble.py</span></div>
             <div>&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── <span class="dir">models/</span></div>
             <div>&nbsp;&nbsp;├── <span class="dir">notebooks/</span></div>
-            <div>&nbsp;&nbsp;├── <span class="dir">deployment/</span></div>
             <div>&nbsp;&nbsp;├── <span class="file">main.py</span></div>
+            <div>&nbsp;&nbsp;├── <span class="file">submit.py</span></div>
             <div>&nbsp;&nbsp;├── <span class="file">config/config.yaml</span></div>
             <div>&nbsp;&nbsp;└── <span class="file">README.md</span></div>
           </div>
